@@ -1,20 +1,26 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sainakuo/scalable-notification-system/internal/model"
+	"github.com/sainakuo/scalable-notification-system/internal/queue"
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
 )
 
 type TaskHandler struct {
-	Repo *repository.TaskRepository
+	Repo  *repository.TaskRepository
+	Queue *queue.RedisQueue
 }
 
-func NewTaskHandler(repo *repository.TaskRepository) *TaskHandler {
-	return &TaskHandler{Repo: repo}
+func NewTaskHandler(repo *repository.TaskRepository, taskQueue *queue.RedisQueue) *TaskHandler {
+	return &TaskHandler{
+		Repo:  repo,
+		Queue: taskQueue,
+	}
 }
 
 func (h *TaskHandler) CreateTask(c *gin.Context) {
@@ -33,6 +39,14 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to create task",
+		})
+		return
+	}
+
+	err = h.Queue.PushTask(context.Background(), createdTask.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to push task to queue",
 		})
 		return
 	}
