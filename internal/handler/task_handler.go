@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sainakuo/scalable-notification-system/internal/model"
@@ -37,4 +38,38 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, createdTask)
+}
+
+func (h *TaskHandler) GetTaskByID(c *gin.Context) {
+	idParam := c.Param("id")
+
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid task id",
+		})
+		return
+	}
+
+	task, err := h.Repo.GetTaskByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "task not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, task)
+}
+
+func (h *TaskHandler) GetAllTasks(c *gin.Context) {
+	tasks, err := h.Repo.GetAllTasks()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to get tasks",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, tasks)
 }

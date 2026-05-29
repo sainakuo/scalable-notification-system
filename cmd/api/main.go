@@ -34,5 +34,8 @@ func main() {
 
 	router.POST("/tasks", taskHandler.CreateTask)
 
+	router.GET("/tasks", taskHandler.GetAllTasks)
+	router.GET("/tasks/:id", taskHandler.GetTaskByID)
+
 	router.Run(":8080")
 }

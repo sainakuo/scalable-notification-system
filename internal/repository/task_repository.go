@@ -40,3 +40,67 @@ func (r *TaskRepository) CreateTask(task model.Task) (model.Task, error) {
 
 	return task, nil
 }
+
+func (r *TaskRepository) GetTaskByID(id int) (model.Task, error) {
+	query := `
+		SELECT id, user_id, type, payload, status, retry_count, created_at
+		FROM tasks
+		WHERE id = $1
+	`
+
+	var task model.Task
+
+	err := r.DB.QueryRow(context.Background(), query, id).Scan(
+		&task.ID,
+		&task.UserID,
+		&task.Type,
+		&task.Payload,
+		&task.Status,
+		&task.RetryCount,
+		&task.CreatedAt,
+	)
+
+	if err != nil {
+		return model.Task{}, err
+	}
+
+	return task, nil
+}
+
+func (r *TaskRepository) GetAllTasks() ([]model.Task, error) {
+	query := `
+		SELECT id, user_id, type, payload, status, retry_count, created_at
+		FROM tasks
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.DB.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []model.Task
+
+	for rows.Next() {
+		var task model.Task
+
+		err := rows.Scan(
+			&task.ID,
+			&task.UserID,
+			&task.Type,
+			&task.Payload,
+			&task.Status,
+			&task.RetryCount,
+			&task.CreatedAt,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		tasks = append(tasks, task)
+	}
+
+	return tasks, nil
+}
