@@ -104,3 +104,21 @@ func (r *TaskRepository) GetAllTasks() ([]model.Task, error) {
 
 	return tasks, nil
 }
+
+func (r *TaskRepository) UpdateStatus(taskID int, status string) error {
+
+	query := `
+		UPDATE tasks
+		SET status = $1
+		WHERE id = $2
+	`
+
+	_, err := r.DB.Exec(
+		context.Background(),
+		query,
+		status,
+		taskID,
+	)
+
+	return err
+}
