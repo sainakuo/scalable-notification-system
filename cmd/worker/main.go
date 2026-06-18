@@ -13,6 +13,8 @@ import (
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
 )
 
+const maxRetries = 3
+
 type Job struct {
 	TaskID int
 }
@@ -41,7 +43,7 @@ func main() {
 	workerCount := 5
 
 	for i := 1; i <= workerCount; i++ {
-		go startWorker(i, jobs, taskRepo)
+		go startWorker(i, jobs, taskRepo, redisClient)
 	}
 
 	fmt.Println("Worker pool started...")
@@ -72,39 +74,73 @@ func main() {
 	}
 }
 
-func startWorker(workerID int, jobs <-chan Job, taskRepo *repository.TaskRepository) {
+func startWorker(workerID int, jobs <-chan Job, taskRepo *repository.TaskRepository, redisClient *redis.Client) {
 	for job := range jobs {
 		fmt.Println("Worker", workerID, "processing task", job.TaskID)
 
-		task, err := taskRepo.GetTaskByID(job.TaskID)
+		err := processTask(job.TaskID, taskRepo)
 
 		if err != nil {
-			log.Println("Failed to get task:", err)
+			log.Println("Worker", workerID, "failed task", job.TaskID, "error:", err)
+
+			task, getErr := taskRepo.GetTaskByID(job.TaskID)
+			if getErr != nil {
+				log.Println("Failed to get task after error:", getErr)
+				continue
+			}
+
+			if task.RetryCount < maxRetries {
+				err = taskRepo.IncrementRetryCount(job.TaskID)
+				if err != nil {
+					log.Println("Failed to increment retry count:", err)
+					continue
+				}
+
+				err = redisClient.LPush(context.Background(), "tasks_queue", strconv.Itoa(job.TaskID)).Err()
+				if err != nil {
+					log.Println("Failed to requeue task:", err)
+					continue
+				}
+
+				log.Println("Task requeued:", job.TaskID)
+			} else {
+				err = taskRepo.UpdateStatus(job.TaskID, "failed")
+				if err != nil {
+					log.Println("Failed to mark task as failed:", err)
+				}
+
+				log.Println("Task marked as failed:", job.TaskID)
+			}
+
 			continue
 		}
 
-		err = taskRepo.UpdateStatus(
-			task.ID,
-			"processing",
-		)
-		if err != nil {
-			log.Println("Failed to update status:", err)
-			continue
-		}
+		fmt.Println("Worker", workerID, "finished task", job.TaskID)
+	}
+}
 
-		time.Sleep(1 * time.Second)
-
-		err = taskRepo.UpdateStatus(
-			task.ID,
-			"done",
-		)
-		if err != nil {
-			log.Println("Failed to update status:", err)
-			continue
-		}
-
-		fmt.Println("Worker", workerID, "finished task", task.ID)
-
+func processTask(taskID int, taskRepo *repository.TaskRepository) error {
+	task, err := taskRepo.GetTaskByID(taskID)
+	if err != nil {
+		return err
 	}
 
+	err = taskRepo.UpdateStatus(task.ID, "processing")
+	if err != nil {
+		return err
+	}
+
+	// Temporary fake error for testing retry
+	if task.Type == "fail" {
+		return fmt.Errorf("simulated task processing error")
+	}
+
+	time.Sleep(1 * time.Second)
+
+	err = taskRepo.UpdateStatus(task.ID, "done")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

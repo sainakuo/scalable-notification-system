@@ -122,3 +122,19 @@ func (r *TaskRepository) UpdateStatus(taskID int, status string) error {
 
 	return err
 }
+
+func (r *TaskRepository) IncrementRetryCount(taskID int) error {
+	query := `
+		UPDATE tasks
+		SET retry_count = retry_count + 1
+		WHERE id = $1
+	`
+
+	_, err := r.DB.Exec(
+		context.Background(),
+		query,
+		taskID,
+	)
+
+	return err
+}
