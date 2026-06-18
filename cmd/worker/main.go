@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
+	notificationpb "github.com/sainakuo/scalable-notification-system/proto/notificationpb"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const maxRetries = 3
@@ -36,6 +38,17 @@ func main() {
 		},
 	)
 
+	grpcConn, err := grpc.Dial(
+		"localhost:50051",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer grpcConn.Close()
+
+	notificationClient := notificationpb.NewNotificationServiceClient(grpcConn)
+
 	taskRepo := repository.NewTaskRepository(db)
 
 	jobs := make(chan Job, 100)
@@ -43,7 +56,7 @@ func main() {
 	workerCount := 5
 
 	for i := 1; i <= workerCount; i++ {
-		go startWorker(i, jobs, taskRepo, redisClient)
+		go startWorker(i, jobs, taskRepo, redisClient, notificationClient)
 	}
 
 	fmt.Println("Worker pool started...")
@@ -74,11 +87,11 @@ func main() {
 	}
 }
 
-func startWorker(workerID int, jobs <-chan Job, taskRepo *repository.TaskRepository, redisClient *redis.Client) {
+func startWorker(workerID int, jobs <-chan Job, taskRepo *repository.TaskRepository, redisClient *redis.Client, notificationClient notificationpb.NotificationServiceClient) {
 	for job := range jobs {
 		fmt.Println("Worker", workerID, "processing task", job.TaskID)
 
-		err := processTask(job.TaskID, taskRepo)
+		err := processTask(job.TaskID, taskRepo, notificationClient)
 
 		if err != nil {
 			log.Println("Worker", workerID, "failed task", job.TaskID, "error:", err)
@@ -119,7 +132,7 @@ func startWorker(workerID int, jobs <-chan Job, taskRepo *repository.TaskReposit
 	}
 }
 
-func processTask(taskID int, taskRepo *repository.TaskRepository) error {
+func processTask(taskID int, taskRepo *repository.TaskRepository, notificationClient notificationpb.NotificationServiceClient) error {
 	task, err := taskRepo.GetTaskByID(taskID)
 	if err != nil {
 		return err
@@ -135,7 +148,22 @@ func processTask(taskID int, taskRepo *repository.TaskRepository) error {
 		return fmt.Errorf("simulated task processing error")
 	}
 
-	time.Sleep(1 * time.Second)
+	response, err := notificationClient.SendNotification(
+		context.Background(),
+		&notificationpb.SendNotificationRequest{
+			TaskId:  int32(task.ID),
+			UserId:  int32(task.UserID),
+			Type:    task.Type,
+			Payload: task.Payload,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	if !response.Success {
+		return fmt.Errorf("notification sender failed: %s", response.Message)
+	}
 
 	err = taskRepo.UpdateStatus(task.ID, "done")
 	if err != nil {
