@@ -45,6 +45,7 @@ services:
     depends_on:
       - postgres
       - redis
+      - migrate
 
   worker:
     build:
@@ -63,6 +64,21 @@ services:
       - postgres
       - redis
       - grpc-sender
+      - migrate
+
+  migrate:
+    image: postgres:16
+    container_name: sns_migrate
+    depends_on:
+      - postgres
+    volumes:
+      - ./migrations:/migrations
+    environment:
+      PGPASSWORD: postgres
+    command: >
+      sh -c "until pg_isready -h postgres -U postgres -d sns_db;
+      do echo waiting for postgres; sleep 2; done;
+      psql -h postgres -U postgres -d sns_db -f /migrations/001_create_tasks_table.sql"
 
 volumes:
   postgres_data:
