@@ -4,7 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"strconv"
+	"sync"
+	"syscall"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sainakuo/scalable-notification-system/internal/config"
@@ -40,41 +44,64 @@ func main() {
 
 	jobs := make(chan Job, 100)
 
+	var wg sync.WaitGroup
 	workerCount := 5
 
 	for i := 1; i <= workerCount; i++ {
-		go startWorker(i, jobs, taskRepo, redisClient, notificationClient)
+		wg.Add(1)
+		go startWorker(i, jobs, taskRepo, redisClient, notificationClient, &wg)
 	}
 
 	fmt.Println("Worker pool started...")
 
-	for {
-		result, err := redisClient.BRPop(
-			ctx,
-			0,
-			"tasks_queue",
-		).Result()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-		if err != nil {
-			log.Println("Redis error: ", err)
-			continue
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		for {
+			result, err := redisClient.BRPop(ctx, 0, "tasks_queue").Result()
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				log.Println("Redis error:", err)
+				continue
+			}
+
+			taskID, err := strconv.Atoi(result[1])
+			if err != nil {
+				log.Println("Invalid task id:", result[1])
+				continue
+			}
+
+			jobs <- Job{TaskID: taskID}
 		}
+	}()
 
-		taskID, err := strconv.Atoi(
-			result[1],
-		)
+	fmt.Println("Worker pool started...")
 
-		if err != nil {
-			log.Println("Invalid task id:", result[1])
-			continue
-		}
+	<-quit
 
-		jobs <- Job{TaskID: taskID}
+	log.Println("Shutting down worker...")
+	cancel()
+	close(jobs)
+	wg.Wait()
 
-	}
+	log.Println("Worker stopped")
 }
 
-func startWorker(workerID int, jobs <-chan Job, taskRepo *repository.TaskRepository, redisClient *redis.Client, notificationClient notificationpb.NotificationServiceClient) {
+func startWorker(
+	workerID int,
+	jobs <-chan Job,
+	taskRepo *repository.TaskRepository,
+	redisClient *redis.Client,
+	notificationClient notificationpb.NotificationServiceClient,
+	wg *sync.WaitGroup,
+) {
+	defer wg.Done()
 	for job := range jobs {
 		fmt.Println("Worker", workerID, "processing task", job.TaskID)
 
