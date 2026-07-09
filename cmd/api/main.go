@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/handler"
@@ -24,9 +22,7 @@ func main() {
 	}
 	defer db.Close(ctx)
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: cfg.RedisAddr,
-	})
+	redisClient := config.ConnectRedis(cfg.RedisAddr)
 
 	taskQueue := queue.NewRedisQueue(redisClient)
 
@@ -34,17 +30,8 @@ func main() {
 	taskHandler := handler.NewTaskHandler(taskRepo, taskQueue)
 
 	router := gin.Default()
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"service": "api",
-		})
-	})
 
-	router.POST("/tasks", taskHandler.CreateTask)
-
-	router.GET("/tasks", taskHandler.GetAllTasks)
-	router.GET("/tasks/:id", taskHandler.GetTaskByID)
+	handler.RegisterRoutes(router, taskHandler)
 
 	router.Run(":" + cfg.APIPort)
 }

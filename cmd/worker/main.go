@@ -7,12 +7,9 @@ import (
 	"strconv"
 
 	"github.com/redis/go-redis/v9"
-
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
 	notificationpb "github.com/sainakuo/scalable-notification-system/proto/notificationpb"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const maxRetries = 3
@@ -31,20 +28,13 @@ func main() {
 	}
 	defer db.Close(ctx)
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: cfg.RedisAddr,
-	})
+	redisClient := config.ConnectRedis(cfg.RedisAddr)
 
-	grpcConn, err := grpc.Dial(
-		cfg.GRPCSenderAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	grpcConn, notificationClient, err := config.ConnectNotificationService(cfg.GRPCSenderAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer grpcConn.Close()
-
-	notificationClient := notificationpb.NewNotificationServiceClient(grpcConn)
 
 	taskRepo := repository.NewTaskRepository(db)
 
