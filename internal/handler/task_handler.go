@@ -23,6 +23,17 @@ func NewTaskHandler(repo *repository.TaskRepository, taskQueue *queue.RedisQueue
 	}
 }
 
+// CreateTask godoc
+// @Summary Create a new task
+// @Description Creates a task, saves it to PostgreSQL and pushes task ID to Redis queue
+// @Tags tasks
+// @Accept json
+// @Produce json
+// @Param task body model.Task true "Task data"
+// @Success 201 {object} model.Task
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /tasks [post]
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var task model.Task
 
@@ -54,6 +65,16 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	c.JSON(http.StatusCreated, createdTask)
 }
 
+// GetTaskByID godoc
+// @Summary Get task by ID
+// @Description Returns task by ID
+// @Tags tasks
+// @Produce json
+// @Param id path int true "Task ID"
+// @Success 200 {object} model.Task
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Router /tasks/{id} [get]
 func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 	idParam := c.Param("id")
 
@@ -76,6 +97,14 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 	c.JSON(http.StatusOK, task)
 }
 
+// GetAllTasks godoc
+// @Summary Get all tasks
+// @Description Returns all tasks ordered by creation date
+// @Tags tasks
+// @Produce json
+// @Success 200 {array} model.Task
+// @Failure 500 {object} map[string]string
+// @Router /tasks [get]
 func (h *TaskHandler) GetAllTasks(c *gin.Context) {
 	tasks, err := h.Repo.GetAllTasks()
 	if err != nil {

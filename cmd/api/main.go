@@ -11,12 +11,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	_ "github.com/sainakuo/scalable-notification-system/docs"
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/handler"
 	"github.com/sainakuo/scalable-notification-system/internal/queue"
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+// @title Scalable Notification System API
+// @version 1.0
+// @description REST API for asynchronous task processing with Go, Gin, PostgreSQL, Redis, Workers and gRPC.
+// @host localhost:8080
+// @BasePath /
 func main() {
 	ctx := context.Background()
 	cfg := config.LoadConfig()
@@ -35,6 +43,7 @@ func main() {
 	taskHandler := handler.NewTaskHandler(taskRepo, taskQueue)
 
 	router := gin.Default()
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	handler.RegisterRoutes(router, taskHandler)
 
