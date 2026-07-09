@@ -15,16 +15,17 @@ import (
 )
 
 func main() {
-	db, err := config.ConnectDB()
+	ctx := context.Background()
+	cfg := config.LoadConfig()
 
+	db, err := config.ConnectDB(cfg.DatabaseURL())
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	defer db.Close(context.Background())
+	defer db.Close(ctx)
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: cfg.RedisAddr,
 	})
 
 	taskQueue := queue.NewRedisQueue(redisClient)
@@ -45,5 +46,5 @@ func main() {
 	router.GET("/tasks", taskHandler.GetAllTasks)
 	router.GET("/tasks/:id", taskHandler.GetTaskByID)
 
-	router.Run(":8080")
+	router.Run(":" + cfg.APIPort)
 }

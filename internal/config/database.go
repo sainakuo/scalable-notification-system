@@ -7,11 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func ConnectDB() (*pgx.Conn, error) {
-	connString := "postgres://postgres:postgres@localhost:5432/sns_db"
-
-	conn, err := pgx.Connect(context.Background(), connString)
-
+func ConnectDB(databaseURL string) (*pgx.Conn, error) {
+	conn, err := pgx.Connect(context.Background(), databaseURL)
 	if err != nil {
 		return nil, err
 	}

@@ -23,23 +23,20 @@ type Job struct {
 
 func main() {
 	ctx := context.Background()
+	cfg := config.LoadConfig()
 
-	db, err := config.ConnectDB()
-
+	db, err := config.ConnectDB(cfg.DatabaseURL())
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	defer db.Close(ctx)
 
-	redisClient := redis.NewClient(
-		&redis.Options{
-			Addr: "localhost:6379",
-		},
-	)
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: cfg.RedisAddr,
+	})
 
 	grpcConn, err := grpc.Dial(
-		"localhost:50051",
+		cfg.GRPCSenderAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
