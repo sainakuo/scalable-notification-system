@@ -1,25 +1,21 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sainakuo/scalable-notification-system/internal/model"
-	"github.com/sainakuo/scalable-notification-system/internal/queue"
-	"github.com/sainakuo/scalable-notification-system/internal/repository"
+	"github.com/sainakuo/scalable-notification-system/internal/service"
 )
 
 type TaskHandler struct {
-	Repo  *repository.TaskRepository
-	Queue *queue.RedisQueue
+	Service *service.TaskService
 }
 
-func NewTaskHandler(repo *repository.TaskRepository, taskQueue *queue.RedisQueue) *TaskHandler {
+func NewTaskHandler(taskService *service.TaskService) *TaskHandler {
 	return &TaskHandler{
-		Repo:  repo,
-		Queue: taskQueue,
+		Service: taskService,
 	}
 }
 
@@ -44,20 +40,11 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	task.Status = "pending"
+	createdTask, err := h.Service.CreateTask(c.Request.Context(), task)
 
-	createdTask, err := h.Repo.CreateTask(task)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to create task",
-		})
-		return
-	}
-
-	err = h.Queue.PushTask(context.Background(), createdTask.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to push task to queue",
+			"error": err.Error(),
 		})
 		return
 	}
@@ -86,7 +73,7 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 		return
 	}
 
-	task, err := h.Repo.GetTaskByID(id)
+	task, err := h.Service.GetTaskByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "task not found",
@@ -106,7 +93,7 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /tasks [get]
 func (h *TaskHandler) GetAllTasks(c *gin.Context) {
-	tasks, err := h.Repo.GetAllTasks()
+	tasks, err := h.Service.GetAllTasks()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to get tasks",

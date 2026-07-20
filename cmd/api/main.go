@@ -16,6 +16,7 @@ import (
 	"github.com/sainakuo/scalable-notification-system/internal/handler"
 	"github.com/sainakuo/scalable-notification-system/internal/queue"
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
+	"github.com/sainakuo/scalable-notification-system/internal/service"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -40,7 +41,8 @@ func main() {
 	taskQueue := queue.NewRedisQueue(redisClient)
 
 	taskRepo := repository.NewTaskRepository(db)
-	taskHandler := handler.NewTaskHandler(taskRepo, taskQueue)
+	taskService := service.NewTaskService(taskRepo, taskQueue)
+	taskHandler := handler.NewTaskHandler(taskService)
 
 	router := gin.Default()
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
