@@ -30,11 +30,11 @@ func main() {
 	ctx := context.Background()
 	cfg := config.LoadConfig()
 
-	db, err := config.ConnectDB(cfg.DatabaseURL())
+	db, err := config.ConnectPostgres(ctx, cfg.DatabaseURL())
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer db.Close()
 
 	redisClient := config.ConnectRedis(cfg.RedisAddr)
 

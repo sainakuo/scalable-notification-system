@@ -4,16 +4,19 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func ConnectDB(databaseURL string) (*pgx.Conn, error) {
-	conn, err := pgx.Connect(context.Background(), databaseURL)
+func ConnectPostgres(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
+	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create Postgres pool: %w", err)
 	}
 
-	fmt.Println("Connected to PostgreSQL")
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping postgres: %w", err)
+	}
 
-	return conn, nil
+	return pool, nil
 }

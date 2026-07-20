@@ -5,14 +5,14 @@ import (
 
 	"github.com/sainakuo/scalable-notification-system/internal/model"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type TaskRepository struct {
-	DB *pgx.Conn
+	DB *pgxpool.Pool
 }
 
-func NewTaskRepository(db *pgx.Conn) *TaskRepository {
+func NewTaskRepository(db *pgxpool.Pool) *TaskRepository {
 	return &TaskRepository{
 		DB: db,
 	}
