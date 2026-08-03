@@ -6,16 +6,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sainakuo/scalable-notification-system/internal/model"
-	"github.com/sainakuo/scalable-notification-system/internal/service"
 )
 
 type TaskHandler struct {
-	Service *service.TaskService
+	service TaskService
 }
 
-func NewTaskHandler(taskService *service.TaskService) *TaskHandler {
+func NewTaskHandler(taskService TaskService) *TaskHandler {
+	if taskService == nil {
+		panic("task service is nil")
+	}
 	return &TaskHandler{
-		Service: taskService,
+		service: taskService,
 	}
 }
 
@@ -40,7 +42,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	createdTask, err := h.Service.CreateTask(c.Request.Context(), task)
+	createdTask, err := h.service.CreateTask(c.Request.Context(), task)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -73,7 +75,7 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 		return
 	}
 
-	task, err := h.Service.GetTaskByID(id)
+	task, err := h.service.GetTaskByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "task not found",
@@ -93,7 +95,7 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /tasks [get]
 func (h *TaskHandler) GetAllTasks(c *gin.Context) {
-	tasks, err := h.Service.GetAllTasks()
+	tasks, err := h.service.GetAllTasks()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to get tasks",
