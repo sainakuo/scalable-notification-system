@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -27,7 +26,13 @@ import (
 // @host localhost:8080
 // @BasePath /
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
 	cfg := config.LoadConfig()
 
 	db, err := config.ConnectPostgres(ctx, cfg.DatabaseURL())
@@ -37,6 +42,7 @@ func main() {
 	defer db.Close()
 
 	redisClient := config.ConnectRedis(cfg.RedisAddr)
+	defer redisClient.Close()
 
 	taskQueue := queue.NewRedisQueue(redisClient)
 
@@ -62,10 +68,7 @@ func main() {
 
 	log.Println("API server started on port", cfg.APIPort)
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	<-quit
+	<-ctx.Done()
 
 	log.Println("Shutting down API server...")
 

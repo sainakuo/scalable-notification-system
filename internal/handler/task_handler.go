@@ -75,7 +75,7 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 		return
 	}
 
-	task, err := h.service.GetTaskByID(id)
+	task, err := h.service.GetTaskByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "task not found",
@@ -95,7 +95,7 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /tasks [get]
 func (h *TaskHandler) GetAllTasks(c *gin.Context) {
-	tasks, err := h.service.GetAllTasks()
+	tasks, err := h.service.GetAllTasks(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to get tasks",

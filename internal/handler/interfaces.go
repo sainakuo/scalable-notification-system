@@ -13,8 +13,9 @@ type TaskService interface {
 	) (model.Task, error)
 
 	GetTaskByID(
+		ctx context.Context,
 		id int,
 	) (model.Task, error)
 
-	GetAllTasks() ([]model.Task, error)
+	GetAllTasks(ctx context.Context) ([]model.Task, error)
 }

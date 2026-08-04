@@ -7,9 +7,9 @@ import (
 )
 
 type TaskRepository interface {
-	CreateTask(task model.Task) (model.Task, error)
-	GetTaskByID(id int) (model.Task, error)
-	GetAllTasks() ([]model.Task, error)
+	CreateTask(ctx context.Context, task model.Task) (model.Task, error)
+	GetTaskByID(ctx context.Context, id int) (model.Task, error)
+	GetAllTasks(ctx context.Context) ([]model.Task, error)
 }
 
 type TaskQueue interface {

@@ -30,7 +30,7 @@ func NewTaskService(repo TaskRepository, taskQueue TaskQueue) *TaskService {
 func (s *TaskService) CreateTask(ctx context.Context, task model.Task) (model.Task, error) {
 	task.Status = "pending"
 
-	createdTask, err := s.repo.CreateTask(task)
+	createdTask, err := s.repo.CreateTask(ctx, task)
 
 	if err != nil {
 		return model.Task{}, fmt.Errorf("create task in repository: %w", err)
@@ -43,8 +43,8 @@ func (s *TaskService) CreateTask(ctx context.Context, task model.Task) (model.Ta
 	return createdTask, nil
 }
 
-func (s *TaskService) GetTaskByID(id int) (model.Task, error) {
-	task, err := s.repo.GetTaskByID(id)
+func (s *TaskService) GetTaskByID(ctx context.Context, id int) (model.Task, error) {
+	task, err := s.repo.GetTaskByID(ctx, id)
 	if err != nil {
 		return model.Task{}, fmt.Errorf("get task by id: %w", err)
 	}
@@ -52,8 +52,8 @@ func (s *TaskService) GetTaskByID(id int) (model.Task, error) {
 	return task, nil
 }
 
-func (s *TaskService) GetAllTasks() ([]model.Task, error) {
-	tasks, err := s.repo.GetAllTasks()
+func (s *TaskService) GetAllTasks(ctx context.Context) ([]model.Task, error) {
+	tasks, err := s.repo.GetAllTasks(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get all tasks: %w", err)
 	}

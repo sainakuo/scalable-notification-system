@@ -18,7 +18,7 @@ func NewTaskRepository(db *pgxpool.Pool) *TaskRepository {
 	}
 }
 
-func (r *TaskRepository) CreateTask(task model.Task) (model.Task, error) {
+func (r *TaskRepository) CreateTask(ctx context.Context, task model.Task) (model.Task, error) {
 	query := `
 		INSERT INTO tasks (user_id, type, payload, status)
 		VALUES ($1, $2, $3, $4)
@@ -26,7 +26,7 @@ func (r *TaskRepository) CreateTask(task model.Task) (model.Task, error) {
 	`
 
 	err := r.DB.QueryRow(
-		context.Background(),
+		ctx,
 		query,
 		task.UserID,
 		task.Type,
@@ -41,7 +41,7 @@ func (r *TaskRepository) CreateTask(task model.Task) (model.Task, error) {
 	return task, nil
 }
 
-func (r *TaskRepository) GetTaskByID(id int) (model.Task, error) {
+func (r *TaskRepository) GetTaskByID(ctx context.Context, id int) (model.Task, error) {
 	query := `
 		SELECT id, user_id, type, payload, status, retry_count, created_at
 		FROM tasks
@@ -50,7 +50,7 @@ func (r *TaskRepository) GetTaskByID(id int) (model.Task, error) {
 
 	var task model.Task
 
-	err := r.DB.QueryRow(context.Background(), query, id).Scan(
+	err := r.DB.QueryRow(ctx, query, id).Scan(
 		&task.ID,
 		&task.UserID,
 		&task.Type,
@@ -67,14 +67,14 @@ func (r *TaskRepository) GetTaskByID(id int) (model.Task, error) {
 	return task, nil
 }
 
-func (r *TaskRepository) GetAllTasks() ([]model.Task, error) {
+func (r *TaskRepository) GetAllTasks(ctx context.Context) ([]model.Task, error) {
 	query := `
 		SELECT id, user_id, type, payload, status, retry_count, created_at
 		FROM tasks
 		ORDER BY created_at DESC
 	`
 
-	rows, err := r.DB.Query(context.Background(), query)
+	rows, err := r.DB.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (r *TaskRepository) GetAllTasks() ([]model.Task, error) {
 	return tasks, nil
 }
 
-func (r *TaskRepository) UpdateStatus(taskID int, status string) error {
+func (r *TaskRepository) UpdateStatus(ctx context.Context, taskID int, status string) error {
 
 	query := `
 		UPDATE tasks
@@ -114,7 +114,7 @@ func (r *TaskRepository) UpdateStatus(taskID int, status string) error {
 	`
 
 	_, err := r.DB.Exec(
-		context.Background(),
+		ctx,
 		query,
 		status,
 		taskID,
@@ -123,7 +123,7 @@ func (r *TaskRepository) UpdateStatus(taskID int, status string) error {
 	return err
 }
 
-func (r *TaskRepository) IncrementRetryCount(taskID int) error {
+func (r *TaskRepository) IncrementRetryCount(ctx context.Context, taskID int) error {
 	query := `
 		UPDATE tasks
 		SET retry_count = retry_count + 1
@@ -131,7 +131,7 @@ func (r *TaskRepository) IncrementRetryCount(taskID int) error {
 	`
 
 	_, err := r.DB.Exec(
-		context.Background(),
+		ctx,
 		query,
 		taskID,
 	)

@@ -23,7 +23,9 @@ type Job struct {
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cfg := config.LoadConfig()
 
 	db, err := config.ConnectPostgres(ctx, cfg.DatabaseURL())
@@ -49,11 +51,8 @@ func main() {
 
 	for i := 1; i <= workerCount; i++ {
 		wg.Add(1)
-		go startWorker(i, jobs, taskRepo, redisClient, notificationClient, &wg)
+		go startWorker(ctx, i, jobs, taskRepo, redisClient, notificationClient, &wg)
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -75,7 +74,11 @@ func main() {
 				continue
 			}
 
-			jobs <- Job{TaskID: taskID}
+			select {
+			case jobs <- Job{TaskID: taskID}:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
@@ -92,6 +95,7 @@ func main() {
 }
 
 func startWorker(
+	ctx context.Context,
 	workerID int,
 	jobs <-chan Job,
 	taskRepo *repository.TaskRepository,
@@ -103,25 +107,25 @@ func startWorker(
 	for job := range jobs {
 		fmt.Println("Worker", workerID, "processing task", job.TaskID)
 
-		err := processTask(job.TaskID, taskRepo, notificationClient)
+		err := processTask(ctx, job.TaskID, taskRepo, notificationClient)
 
 		if err != nil {
 			log.Println("Worker", workerID, "failed task", job.TaskID, "error:", err)
 
-			task, getErr := taskRepo.GetTaskByID(job.TaskID)
+			task, getErr := taskRepo.GetTaskByID(ctx, job.TaskID)
 			if getErr != nil {
 				log.Println("Failed to get task after error:", getErr)
 				continue
 			}
 
 			if task.RetryCount < maxRetries {
-				err = taskRepo.IncrementRetryCount(job.TaskID)
+				err = taskRepo.IncrementRetryCount(ctx, job.TaskID)
 				if err != nil {
 					log.Println("Failed to increment retry count:", err)
 					continue
 				}
 
-				err = redisClient.LPush(context.Background(), "tasks_queue", strconv.Itoa(job.TaskID)).Err()
+				err = redisClient.LPush(ctx, "tasks_queue", strconv.Itoa(job.TaskID)).Err()
 				if err != nil {
 					log.Println("Failed to requeue task:", err)
 					continue
@@ -129,7 +133,7 @@ func startWorker(
 
 				log.Println("Task requeued:", job.TaskID)
 			} else {
-				err = taskRepo.UpdateStatus(job.TaskID, "failed")
+				err = taskRepo.UpdateStatus(ctx, job.TaskID, "failed")
 				if err != nil {
 					log.Println("Failed to mark task as failed:", err)
 				}
@@ -144,13 +148,13 @@ func startWorker(
 	}
 }
 
-func processTask(taskID int, taskRepo *repository.TaskRepository, notificationClient notificationpb.NotificationServiceClient) error {
-	task, err := taskRepo.GetTaskByID(taskID)
+func processTask(ctx context.Context, taskID int, taskRepo *repository.TaskRepository, notificationClient notificationpb.NotificationServiceClient) error {
+	task, err := taskRepo.GetTaskByID(ctx, taskID)
 	if err != nil {
 		return err
 	}
 
-	err = taskRepo.UpdateStatus(task.ID, "processing")
+	err = taskRepo.UpdateStatus(ctx, task.ID, "processing")
 	if err != nil {
 		return err
 	}
@@ -161,7 +165,7 @@ func processTask(taskID int, taskRepo *repository.TaskRepository, notificationCl
 	}
 
 	response, err := notificationClient.SendNotification(
-		context.Background(),
+		ctx,
 		&notificationpb.SendNotificationRequest{
 			TaskId:  int32(task.ID),
 			UserId:  int32(task.UserID),
@@ -177,7 +181,7 @@ func processTask(taskID int, taskRepo *repository.TaskRepository, notificationCl
 		return fmt.Errorf("notification sender failed: %s", response.Message)
 	}
 
-	err = taskRepo.UpdateStatus(task.ID, "done")
+	err = taskRepo.UpdateStatus(ctx, task.ID, "done")
 	if err != nil {
 		return err
 	}
