@@ -2,10 +2,14 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/sainakuo/scalable-notification-system/internal/model"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type TaskRepository struct {
@@ -35,7 +39,7 @@ func (r *TaskRepository) CreateTask(ctx context.Context, task model.Task) (model
 	).Scan(&task.ID, &task.CreatedAt)
 
 	if err != nil {
-		return model.Task{}, err
+		return model.Task{}, fmt.Errorf("create task: %w", err)
 	}
 
 	return task, nil
@@ -60,8 +64,12 @@ func (r *TaskRepository) GetTaskByID(ctx context.Context, id int) (model.Task, e
 		&task.CreatedAt,
 	)
 
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.Task{}, model.ErrTaskNotFound
+	}
+
 	if err != nil {
-		return model.Task{}, err
+		return model.Task{}, fmt.Errorf("get task by id: %w", err)
 	}
 
 	return task, nil
@@ -76,7 +84,7 @@ func (r *TaskRepository) GetAllTasks(ctx context.Context) ([]model.Task, error) 
 
 	rows, err := r.DB.Query(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query all tasks: %w", err)
 	}
 	defer rows.Close()
 
@@ -96,10 +104,14 @@ func (r *TaskRepository) GetAllTasks(ctx context.Context) ([]model.Task, error) 
 		)
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan task: %w", err)
 		}
 
 		tasks = append(tasks, task)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate tasks: %w", err)
 	}
 
 	return tasks, nil
@@ -120,6 +132,10 @@ func (r *TaskRepository) UpdateStatus(ctx context.Context, taskID int, status st
 		taskID,
 	)
 
+	if err != nil {
+		return fmt.Errorf("update task status: %w", err)
+	}
+
 	return err
 }
 
@@ -135,6 +151,10 @@ func (r *TaskRepository) IncrementRetryCount(ctx context.Context, taskID int) er
 		query,
 		taskID,
 	)
+
+	if err != nil {
+		return fmt.Errorf("increment retry count: %w", err)
+	}
 
 	return err
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -77,8 +78,15 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 
 	task, err := h.service.GetTaskByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "task not found",
+		if errors.Is(err, model.ErrTaskNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "task not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
 		})
 		return
 	}
