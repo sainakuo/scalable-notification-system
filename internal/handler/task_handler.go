@@ -28,19 +28,25 @@ func NewTaskHandler(taskService TaskService) *TaskHandler {
 // @Tags tasks
 // @Accept json
 // @Produce json
-// @Param task body model.Task true "Task data"
+// @Param task body CreateTaskRequest true "Task data"
 // @Success 201 {object} model.Task
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /tasks [post]
 func (h *TaskHandler) CreateTask(c *gin.Context) {
-	var task model.Task
+	var req CreateTaskRequest
 
-	if err := c.ShouldBindJSON(&task); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
+	}
+
+	task := model.Task{
+		UserID:  req.UserID,
+		Type:    req.Type,
+		Payload: req.Payload,
 	}
 
 	createdTask, err := h.service.CreateTask(c.Request.Context(), task)
@@ -52,7 +58,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, createdTask)
+	c.JSON(http.StatusCreated, toTaskResponse(createdTask))
 }
 
 // GetTaskByID godoc
@@ -91,7 +97,7 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, task)
+	c.JSON(http.StatusOK, toTaskResponse(task))
 }
 
 // GetAllTasks godoc
@@ -111,5 +117,5 @@ func (h *TaskHandler) GetAllTasks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, tasks)
+	c.JSON(http.StatusOK, toTaskResponses(tasks))
 }
