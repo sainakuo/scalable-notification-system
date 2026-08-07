@@ -37,6 +37,14 @@ func (s *TaskService) CreateTask(ctx context.Context, task model.Task) (model.Ta
 	}
 
 	if err := s.queue.PushTask(ctx, createdTask.ID); err != nil {
+		if deleteErr := s.repo.DeleteTask(ctx, createdTask.ID); deleteErr != nil {
+			return model.Task{}, fmt.Errorf(
+				"push task to queue: %w; rollback task: %v",
+				err,
+				deleteErr,
+			)
+
+		}
 		return model.Task{}, fmt.Errorf("push task to queue: %w", err)
 	}
 

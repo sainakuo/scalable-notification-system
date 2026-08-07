@@ -158,3 +158,17 @@ func (r *TaskRepository) IncrementRetryCount(ctx context.Context, taskID int) er
 
 	return err
 }
+
+func (r *TaskRepository) DeleteTask(ctx context.Context, taskID int) error {
+	query := `
+		DELETE FROM tasks
+		WHERE id = $1
+	`
+
+	_, err := r.DB.Exec(ctx, query, taskID)
+	if err != nil {
+		return fmt.Errorf("delete task: %w", err)
+	}
+
+	return nil
+}
