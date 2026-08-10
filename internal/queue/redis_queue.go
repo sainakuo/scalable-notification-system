@@ -2,7 +2,9 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -17,4 +19,29 @@ func NewRedisQueue(client *redis.Client) *RedisQueue {
 
 func (q *RedisQueue) PushTask(ctx context.Context, taskID int) error {
 	return q.Client.LPush(ctx, "tasks_queue", strconv.Itoa(taskID)).Err()
+}
+
+func (q *RedisQueue) PopTask(ctx context.Context) (int, error) {
+	for {
+		result, err := q.Client.BRPop(
+			ctx,
+			5*time.Second,
+			"tasks_queue",
+		).Result()
+
+		if err == redis.Nil {
+			continue
+		}
+
+		if err != nil {
+			return 0, fmt.Errorf("pop task from redis: %w", err)
+		}
+
+		taskID, err := strconv.Atoi(result[1])
+		if err != nil {
+			return 0, fmt.Errorf("parse task id: %w", err)
+		}
+
+		return taskID, nil
+	}
 }
