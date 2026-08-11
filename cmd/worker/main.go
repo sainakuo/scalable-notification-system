@@ -42,14 +42,15 @@ func main() {
 	taskRepo := repository.NewTaskRepository(db)
 	taskQueue := queue.NewRedisQueue(redisClient)
 	notificationSender := sender.NewGRPCSender(notificationClient)
+	retryStrategy := worker.NewRetryStrategy(3)
 
 	taskWorker := worker.New(
 		taskRepo,
 		taskQueue,
 		notificationSender,
+		retryStrategy,
 		5,
 		100,
-		3,
 	)
 
 	log.Println("Worker started")

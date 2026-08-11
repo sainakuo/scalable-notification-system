@@ -12,15 +12,15 @@ type Job struct {
 }
 
 type Worker struct {
-	repo        TaskRepository
-	queue       TaskQueue
-	sender      NotificationSender
-	workerCount int
-	jobBuffer   int
-	maxRetries  int
+	repo          TaskRepository
+	queue         TaskQueue
+	sender        NotificationSender
+	retryStrategy *RetryStrategy
+	workerCount   int
+	jobBuffer     int
 }
 
-func New(repo TaskRepository, queue TaskQueue, sender NotificationSender, workerCount int, jobBuffer int, maxRetries int) *Worker {
+func New(repo TaskRepository, queue TaskQueue, sender NotificationSender, retryStrategy *RetryStrategy, workerCount int, jobBuffer int) *Worker {
 	if repo == nil {
 		panic("task repository is nil")
 	}
@@ -33,6 +33,10 @@ func New(repo TaskRepository, queue TaskQueue, sender NotificationSender, worker
 		panic("notification sender is nil")
 	}
 
+	if retryStrategy == nil {
+		panic("retry strategy is nil")
+	}
+
 	if workerCount <= 0 {
 		panic("worker count must be greater than zero")
 	}
@@ -41,17 +45,13 @@ func New(repo TaskRepository, queue TaskQueue, sender NotificationSender, worker
 		panic("job buffer must be greater than zero")
 	}
 
-	if maxRetries < 0 {
-		panic("max retries cannot be negative")
-	}
-
 	return &Worker{
-		repo:        repo,
-		queue:       queue,
-		sender:      sender,
-		workerCount: workerCount,
-		jobBuffer:   jobBuffer,
-		maxRetries:  maxRetries,
+		repo:          repo,
+		queue:         queue,
+		sender:        sender,
+		retryStrategy: retryStrategy,
+		workerCount:   workerCount,
+		jobBuffer:     jobBuffer,
 	}
 }
 
@@ -188,7 +188,7 @@ func (w *Worker) handleRetry(
 		return fmt.Errorf("get task for retry: %w", err)
 	}
 
-	if task.RetryCount >= w.maxRetries {
+	if !w.retryStrategy.ShouldRetry(task.RetryCount) {
 		if err := w.repo.UpdateStatus(ctx, taskID, "failed"); err != nil {
 			return fmt.Errorf("mark task failed: %w", err)
 		}
