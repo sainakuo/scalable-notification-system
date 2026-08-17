@@ -30,6 +30,11 @@ services:
     container_name: sns_grpc_sender
     ports:
       - "50051:50051"
+    environment:
+      REDIS_ADDR: redis:6379
+    depends_on:
+      redis: 
+        condition: service_started
 
   api:
     build:

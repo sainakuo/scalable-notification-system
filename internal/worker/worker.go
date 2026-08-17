@@ -116,14 +116,9 @@ func (w *Worker) processLoop(
 	defer wg.Done()
 
 	for job := range jobs {
-		log.Println(
-			"worker",
-			workerID,
-			"processing task",
-			job.TaskID,
-		)
+		processed, err := w.processTask(ctx, job.TaskID)
 
-		if err := w.processTask(ctx, job.TaskID); err != nil {
+		if err != nil {
 			log.Println(
 				"worker",
 				workerID,
@@ -143,6 +138,18 @@ func (w *Worker) processLoop(
 					retryErr,
 				)
 			}
+
+			continue
+		}
+
+		if !processed {
+			log.Println(
+				"worker",
+				workerID,
+				"skipped task",
+				job.TaskID,
+				"already completed",
+			)
 			continue
 		}
 
@@ -158,25 +165,29 @@ func (w *Worker) processLoop(
 func (w *Worker) processTask(
 	ctx context.Context,
 	taskID int,
-) error {
+) (bool, error) {
 	task, err := w.repo.GetTaskByID(ctx, taskID)
 	if err != nil {
-		return fmt.Errorf("get task: %w", err)
+		return false, fmt.Errorf("get task: %w", err)
+	}
+
+	if task.Status == "done" || task.Status == "failed" {
+		return false, nil
 	}
 
 	if err := w.repo.UpdateStatus(ctx, task.ID, "processing"); err != nil {
-		return fmt.Errorf("set task processing: %w", err)
+		return false, fmt.Errorf("set task processing: %w", err)
 	}
 
 	if err := w.sender.Send(ctx, task); err != nil {
-		return fmt.Errorf("send notification: %w", err)
+		return true, fmt.Errorf("send notification: %w", err)
 	}
 
 	if err := w.repo.UpdateStatus(ctx, task.ID, "done"); err != nil {
-		return fmt.Errorf("set task done: %w", err)
+		return true, fmt.Errorf("set task done: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 func (w *Worker) handleRetry(
