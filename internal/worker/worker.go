@@ -3,7 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 )
 
@@ -16,11 +16,19 @@ type Worker struct {
 	queue         TaskQueue
 	sender        NotificationSender
 	retryStrategy *RetryStrategy
+	logger        *slog.Logger
 	workerCount   int
 	jobBuffer     int
 }
 
-func New(repo TaskRepository, queue TaskQueue, sender NotificationSender, retryStrategy *RetryStrategy, workerCount int, jobBuffer int) *Worker {
+func New(repo TaskRepository,
+	queue TaskQueue,
+	sender NotificationSender,
+	retryStrategy *RetryStrategy,
+	logger *slog.Logger,
+	workerCount int,
+	jobBuffer int,
+) *Worker {
 	if repo == nil {
 		panic("task repository is nil")
 	}
@@ -37,6 +45,10 @@ func New(repo TaskRepository, queue TaskQueue, sender NotificationSender, retryS
 		panic("retry strategy is nil")
 	}
 
+	if logger == nil {
+		panic("logger is nil")
+	}
+
 	if workerCount <= 0 {
 		panic("worker count must be greater than zero")
 	}
@@ -50,6 +62,7 @@ func New(repo TaskRepository, queue TaskQueue, sender NotificationSender, retryS
 		queue:         queue,
 		sender:        sender,
 		retryStrategy: retryStrategy,
+		logger:        logger,
 		workerCount:   workerCount,
 		jobBuffer:     jobBuffer,
 	}
@@ -66,7 +79,10 @@ func (w *Worker) consumeLoop(
 				return
 			}
 
-			log.Println("queue pop error:", err)
+			w.logger.Error(
+				"queue pop failed",
+				"error", err,
+			)
 			continue
 		}
 
@@ -119,23 +135,19 @@ func (w *Worker) processLoop(
 		processed, err := w.processTask(ctx, job.TaskID)
 
 		if err != nil {
-			log.Println(
-				"worker",
-				workerID,
-				"failed task",
-				job.TaskID,
-				"error:",
-				err,
+			w.logger.Error(
+				"task processing failed",
+				"worker_id", workerID,
+				"task_id", job.TaskID,
+				"error", err,
 			)
 
 			if retryErr := w.handleRetry(ctx, job.TaskID); retryErr != nil {
-				log.Println(
-					"worker",
-					workerID,
-					"retry failed for task",
-					job.TaskID,
-					"error:",
-					retryErr,
+				w.logger.Error(
+					"task retry failed",
+					"worker_id", workerID,
+					"task_id", job.TaskID,
+					"error", retryErr,
 				)
 			}
 
@@ -143,21 +155,19 @@ func (w *Worker) processLoop(
 		}
 
 		if !processed {
-			log.Println(
-				"worker",
-				workerID,
-				"skipped task",
-				job.TaskID,
-				"already completed",
+			w.logger.Info(
+				"task skipped",
+				"worker_id", workerID,
+				"task_id", job.TaskID,
+				"reason", "already completed",
 			)
 			continue
 		}
 
-		log.Println(
-			"worker",
-			workerID,
-			"finished task",
-			job.TaskID,
+		w.logger.Info(
+			"task processed",
+			"worker_id", workerID,
+			"task_id", job.TaskID,
 		)
 	}
 }

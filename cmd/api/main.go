@@ -13,6 +13,7 @@ import (
 	_ "github.com/sainakuo/scalable-notification-system/docs"
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/handler"
+	"github.com/sainakuo/scalable-notification-system/internal/logger"
 	"github.com/sainakuo/scalable-notification-system/internal/queue"
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
 	"github.com/sainakuo/scalable-notification-system/internal/service"
@@ -35,6 +36,8 @@ func main() {
 
 	cfg := config.LoadConfig()
 
+	appLogger := logger.New()
+
 	db, err := config.ConnectPostgres(ctx, cfg.DatabaseURL())
 	if err != nil {
 		log.Fatal(err)
@@ -48,9 +51,10 @@ func main() {
 
 	taskRepo := repository.NewTaskRepository(db)
 	taskService := service.NewTaskService(taskRepo, taskQueue)
-	taskHandler := handler.NewTaskHandler(taskService)
+	taskHandler := handler.NewTaskHandler(taskService, appLogger)
 
 	router := gin.Default()
+	router.Use(handler.RequestIDMiddleware())
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	handler.RegisterRoutes(router, taskHandler)

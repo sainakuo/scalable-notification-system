@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/sainakuo/scalable-notification-system/internal/config"
+	"github.com/sainakuo/scalable-notification-system/internal/logger"
 	"github.com/sainakuo/scalable-notification-system/internal/queue"
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
 	"github.com/sainakuo/scalable-notification-system/internal/sender"
@@ -23,6 +24,8 @@ func main() {
 	defer stop()
 
 	cfg := config.LoadConfig()
+
+	appLogger := logger.New()
 
 	db, err := config.ConnectPostgres(ctx, cfg.DatabaseURL())
 	if err != nil {
@@ -49,6 +52,7 @@ func main() {
 		taskQueue,
 		notificationSender,
 		retryStrategy,
+		appLogger,
 		5,
 		100,
 	)
