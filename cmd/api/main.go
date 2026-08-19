@@ -13,6 +13,7 @@ import (
 	_ "github.com/sainakuo/scalable-notification-system/docs"
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/handler"
+	"github.com/sainakuo/scalable-notification-system/internal/health"
 	"github.com/sainakuo/scalable-notification-system/internal/logger"
 	"github.com/sainakuo/scalable-notification-system/internal/queue"
 	"github.com/sainakuo/scalable-notification-system/internal/repository"
@@ -47,6 +48,11 @@ func main() {
 	redisClient := config.ConnectRedis(cfg.RedisAddr)
 	defer redisClient.Close()
 
+	postgresChecker := health.NewPostgresChecker(db)
+	redisChecker := health.NewRedisChecker(redisClient)
+
+	healthHandler := handler.NewHealthHandler(postgresChecker, redisChecker)
+
 	taskQueue := queue.NewRedisQueue(redisClient)
 
 	taskRepo := repository.NewTaskRepository(db)
@@ -57,7 +63,7 @@ func main() {
 	router.Use(handler.RequestIDMiddleware())
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	handler.RegisterRoutes(router, taskHandler)
+	handler.RegisterRoutes(router, taskHandler, healthHandler)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.APIPort,
