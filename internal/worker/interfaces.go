@@ -15,8 +15,17 @@ type TaskRepository interface {
 type TaskQueue interface {
 	PopTask(ctx context.Context) (int, error)
 	PushTask(ctx context.Context, taskID int) error
+	Size(ctx context.Context) (int, error)
 }
 
 type NotificationSender interface {
 	Send(ctx context.Context, task model.Task) error
+}
+
+type Metrics interface {
+	TaskProcessed()
+	TaskFailed()
+	TaskRetried()
+	ObserveTaskDuration(seconds float64)
+	SetQueueSize(size int)
 }

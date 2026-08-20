@@ -45,3 +45,12 @@ func (q *RedisQueue) PopTask(ctx context.Context) (int, error) {
 		return taskID, nil
 	}
 }
+
+func (q *RedisQueue) Size(ctx context.Context) (int, error) {
+	size, err := q.Client.LLen(ctx, "tasks_queue").Result()
+	if err != nil {
+		return 0, fmt.Errorf("get queue size: %w", err)
+	}
+
+	return int(size), nil
+}

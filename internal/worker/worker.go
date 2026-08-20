@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 )
 
 type Job struct {
@@ -17,6 +18,7 @@ type Worker struct {
 	sender        NotificationSender
 	retryStrategy *RetryStrategy
 	logger        *slog.Logger
+	metrics       Metrics
 	workerCount   int
 	jobBuffer     int
 }
@@ -26,6 +28,7 @@ func New(repo TaskRepository,
 	sender NotificationSender,
 	retryStrategy *RetryStrategy,
 	logger *slog.Logger,
+	metrics Metrics,
 	workerCount int,
 	jobBuffer int,
 ) *Worker {
@@ -49,6 +52,10 @@ func New(repo TaskRepository,
 		panic("logger is nil")
 	}
 
+	if metrics == nil {
+		panic("metrics is nil")
+	}
+
 	if workerCount <= 0 {
 		panic("worker count must be greater than zero")
 	}
@@ -63,6 +70,7 @@ func New(repo TaskRepository,
 		sender:        sender,
 		retryStrategy: retryStrategy,
 		logger:        logger,
+		metrics:       metrics,
 		workerCount:   workerCount,
 		jobBuffer:     jobBuffer,
 	}
@@ -74,6 +82,12 @@ func (w *Worker) consumeLoop(
 ) {
 	for {
 		taskID, err := w.queue.PopTask(ctx)
+
+		size, err := w.queue.Size(ctx)
+		if err == nil {
+			w.metrics.SetQueueSize(size)
+		}
+
 		if err != nil {
 			if ctx.Err() != nil {
 				return
@@ -135,6 +149,7 @@ func (w *Worker) processLoop(
 		processed, err := w.processTask(ctx, job.TaskID)
 
 		if err != nil {
+			w.metrics.TaskFailed()
 			w.logger.Error(
 				"task processing failed",
 				"worker_id", workerID,
@@ -164,6 +179,8 @@ func (w *Worker) processLoop(
 			continue
 		}
 
+		w.metrics.TaskProcessed()
+
 		w.logger.Info(
 			"task processed",
 			"worker_id", workerID,
@@ -176,6 +193,14 @@ func (w *Worker) processTask(
 	ctx context.Context,
 	taskID int,
 ) (bool, error) {
+	start := time.Now()
+
+	defer func() {
+		w.metrics.ObserveTaskDuration(
+			time.Since(start).Seconds(),
+		)
+	}()
+
 	task, err := w.repo.GetTaskByID(ctx, taskID)
 	if err != nil {
 		return false, fmt.Errorf("get task: %w", err)
@@ -223,6 +248,13 @@ func (w *Worker) handleRetry(
 
 	if err := w.queue.PushTask(ctx, taskID); err != nil {
 		return fmt.Errorf("requeue task: %w", err)
+	}
+
+	w.metrics.TaskRetried()
+	size, err := w.queue.Size(ctx)
+
+	if err == nil {
+		w.metrics.SetQueueSize(size)
 	}
 
 	return nil

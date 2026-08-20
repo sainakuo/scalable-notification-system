@@ -64,6 +64,8 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     container_name: sns_worker
+    ports:
+      - "9090:9090"
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
