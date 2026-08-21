@@ -10,13 +10,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sainakuo/scalable-notification-system/internal/app"
 	"github.com/sainakuo/scalable-notification-system/internal/config"
-	"github.com/sainakuo/scalable-notification-system/internal/logger"
-	"github.com/sainakuo/scalable-notification-system/internal/metrics"
-	"github.com/sainakuo/scalable-notification-system/internal/queue"
-	"github.com/sainakuo/scalable-notification-system/internal/repository"
-	"github.com/sainakuo/scalable-notification-system/internal/sender"
-	"github.com/sainakuo/scalable-notification-system/internal/worker"
 )
 
 func main() {
@@ -29,30 +24,11 @@ func main() {
 
 	cfg := config.LoadConfig()
 
-	appLogger := logger.New()
-
-	db, err := config.ConnectPostgres(ctx, cfg.DatabaseURL())
+	workerApp, err := app.BuildWorker(ctx, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
-
-	redisClient := config.ConnectRedis(cfg.RedisAddr)
-	defer redisClient.Close()
-
-	grpcConn, notificationClient, err := config.ConnectNotificationService(cfg.GRPCSenderAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer grpcConn.Close()
-
-	taskRepo := repository.NewTaskRepository(db)
-	taskQueue := queue.NewRedisQueue(redisClient)
-	notificationSender := sender.NewGRPCSender(notificationClient)
-	retryStrategy := worker.NewRetryStrategy(3)
-
-	workerMetrics := metrics.NewWorkerMetrics()
-	workerMetrics.Register()
+	defer workerApp.Close()
 
 	metricsServer := &http.Server{
 		Addr:    ":9090",
@@ -68,20 +44,9 @@ func main() {
 		}
 	}()
 
-	taskWorker := worker.New(
-		taskRepo,
-		taskQueue,
-		notificationSender,
-		retryStrategy,
-		appLogger,
-		workerMetrics,
-		5,
-		100,
-	)
-
 	log.Println("Worker started")
 
-	if err := taskWorker.Run(ctx); err != nil &&
+	if err := workerApp.TaskWorker.Run(ctx); err != nil &&
 		!errors.Is(err, context.Canceled) {
 		log.Fatal(err)
 	}

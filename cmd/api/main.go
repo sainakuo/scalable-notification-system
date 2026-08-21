@@ -11,13 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	_ "github.com/sainakuo/scalable-notification-system/docs"
+	"github.com/sainakuo/scalable-notification-system/internal/app"
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/handler"
-	"github.com/sainakuo/scalable-notification-system/internal/health"
-	"github.com/sainakuo/scalable-notification-system/internal/logger"
-	"github.com/sainakuo/scalable-notification-system/internal/queue"
-	"github.com/sainakuo/scalable-notification-system/internal/repository"
-	"github.com/sainakuo/scalable-notification-system/internal/service"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -37,33 +33,17 @@ func main() {
 
 	cfg := config.LoadConfig()
 
-	appLogger := logger.New()
-
-	db, err := config.ConnectPostgres(ctx, cfg.DatabaseURL())
+	apiApp, err := app.BuildAPI(ctx, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
-
-	redisClient := config.ConnectRedis(cfg.RedisAddr)
-	defer redisClient.Close()
-
-	postgresChecker := health.NewPostgresChecker(db)
-	redisChecker := health.NewRedisChecker(redisClient)
-
-	healthHandler := handler.NewHealthHandler(postgresChecker, redisChecker)
-
-	taskQueue := queue.NewRedisQueue(redisClient)
-
-	taskRepo := repository.NewTaskRepository(db)
-	taskService := service.NewTaskService(taskRepo, taskQueue)
-	taskHandler := handler.NewTaskHandler(taskService, appLogger)
+	defer apiApp.Close()
 
 	router := gin.Default()
 	router.Use(handler.RequestIDMiddleware())
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	handler.RegisterRoutes(router, taskHandler, healthHandler)
+	handler.RegisterRoutes(router, apiApp.TaskHandler, apiApp.HealthHandler)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.APIPort,
@@ -71,12 +51,12 @@ func main() {
 	}
 
 	go func() {
+		log.Println("API server started on port", cfg.APIPort)
+
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
 	}()
-
-	log.Println("API server started on port", cfg.APIPort)
 
 	<-ctx.Done()
 
