@@ -96,8 +96,8 @@ services:
       PGPASSWORD: postgres
     command: >
       sh -c "
-      psql -h postgres -U postgres -d sns_db -f /migrations/001_create_tasks_table.sql &&
-      psql -h postgres -U postgres -d sns_db -f /migrations/002_add_task_constraints_and_indexes.sql
+      psql -v ON_ERROR_STOP=1 -h postgres -U postgres -d sns_db -f /migrations/001_create_tasks_table.sql &&
+      psql -v ON_ERROR_STOP=1 -h postgres -U postgres -d sns_db -f /migrations/002_add_task_constraints_and_indexes.sql
       "
 
 volumes:
