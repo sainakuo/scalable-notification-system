@@ -13,6 +13,7 @@ import (
 	notificationpb "github.com/sainakuo/scalable-notification-system/proto/notificationpb"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type server struct {
@@ -99,11 +100,32 @@ func main() {
 		log.Fatal(err)
 	}
 
-	grpcServer := grpc.NewServer(
+	serverOptions := []grpc.ServerOption{
 		grpc.StatsHandler(
 			otelgrpc.NewServerHandler(),
 		),
-	)
+	}
+
+	if cfg.GRPCUseTLS {
+		if cfg.GRPCCertFile == "" || cfg.GRPCKeyFile == "" {
+			log.Fatal("gRPC TLS enabled but certificate or key file is not configured")
+		}
+
+		creds, err := credentials.NewServerTLSFromFile(
+			cfg.GRPCCertFile,
+			cfg.GRPCKeyFile,
+		)
+		if err != nil {
+			log.Fatal("load gRPC TLS credentials:", err)
+		}
+
+		serverOptions = append(
+			serverOptions,
+			grpc.Creds(creds),
+		)
+	}
+
+	grpcServer := grpc.NewServer(serverOptions...)
 
 	notificationpb.RegisterNotificationServiceServer(grpcServer, newServer(deduplicator))
 

@@ -36,7 +36,7 @@ func BuildWorker(
 	redisClient := config.ConnectRedis(cfg.RedisAddr)
 
 	grpcConn, notificationClient, err :=
-		config.ConnectNotificationService(cfg.GRPCSenderAddr)
+		config.ConnectNotificationService(cfg.GRPCSenderAddr, cfg.GRPCUseTLS, cfg.GRPCCAFile)
 	if err != nil {
 		db.Close()
 		_ = redisClient.Close()

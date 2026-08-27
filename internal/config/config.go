@@ -16,7 +16,13 @@ type Config struct {
 
 	RedisAddr      string
 	GRPCSenderAddr string
-	APIPort        string
+	GRPCUseTLS     bool
+
+	GRPCCertFile string
+	GRPCKeyFile  string
+	GRPCCAFile   string
+
+	APIPort string
 }
 
 func LoadConfig() Config {
@@ -31,7 +37,13 @@ func LoadConfig() Config {
 
 		RedisAddr:      getEnv("REDIS_ADDR", "localhost:6379"),
 		GRPCSenderAddr: getEnv("GRPC_SENDER_ADDR", "localhost:50051"),
-		APIPort:        getEnv("API_PORT", "8080"),
+		GRPCUseTLS:     getEnv("GRPC_USE_TLS", "false") == "true",
+
+		GRPCCertFile: getEnv("GRPC_CERT_FILE", ""),
+		GRPCKeyFile:  getEnv("GRPC_KEY_FILE", ""),
+		GRPCCAFile:   getEnv("GRPC_CA_FILE", ""),
+
+		APIPort: getEnv("API_PORT", "8080"),
 	}
 }
 
