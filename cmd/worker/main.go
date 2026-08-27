@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sainakuo/scalable-notification-system/internal/app"
 	"github.com/sainakuo/scalable-notification-system/internal/config"
+	"github.com/sainakuo/scalable-notification-system/internal/tracing"
 )
 
 func main() {
@@ -23,6 +24,26 @@ func main() {
 	defer stop()
 
 	cfg := config.LoadConfig()
+
+	tracerProvider, err := tracing.NewTracerProvider(
+		ctx,
+		"sns-worker",
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancel()
+
+		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+			log.Println("tracer shutdown error:", err)
+		}
+	}()
 
 	workerApp, err := app.BuildWorker(ctx, cfg)
 	if err != nil {

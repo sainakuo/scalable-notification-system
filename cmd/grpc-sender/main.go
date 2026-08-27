@@ -9,7 +9,9 @@ import (
 
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/sender"
+	"github.com/sainakuo/scalable-notification-system/internal/tracing"
 	notificationpb "github.com/sainakuo/scalable-notification-system/proto/notificationpb"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 )
 
@@ -60,7 +62,29 @@ func (s *server) SendNotification(
 }
 
 func main() {
+	ctx := context.Background()
+
 	cfg := config.LoadConfig()
+
+	tracerProvider, err := tracing.NewTracerProvider(
+		ctx,
+		"sns-grpc-sender",
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancel()
+
+		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+			log.Println("tracer shutdown error:", err)
+		}
+	}()
 
 	redisClient := config.ConnectRedis(cfg.RedisAddr)
 	defer redisClient.Close()
@@ -75,7 +99,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.StatsHandler(
+			otelgrpc.NewServerHandler(),
+		),
+	)
 
 	notificationpb.RegisterNotificationServiceServer(grpcServer, newServer(deduplicator))
 

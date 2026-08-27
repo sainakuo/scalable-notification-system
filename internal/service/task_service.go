@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/sainakuo/scalable-notification-system/internal/model"
+	"go.opentelemetry.io/otel"
 )
 
 type TaskService struct {
@@ -28,6 +29,14 @@ func NewTaskService(repo TaskRepository, taskQueue TaskQueue) *TaskService {
 }
 
 func (s *TaskService) CreateTask(ctx context.Context, task model.Task) (model.Task, error) {
+	tracer := otel.Tracer("task-service")
+
+	ctx, span := tracer.Start(
+		ctx,
+		"TaskService.CreateTask",
+	)
+	defer span.End()
+
 	task.Status = "pending"
 
 	createdTask, err := s.repo.CreateTask(ctx, task)

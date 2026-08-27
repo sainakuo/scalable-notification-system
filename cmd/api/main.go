@@ -14,8 +14,10 @@ import (
 	"github.com/sainakuo/scalable-notification-system/internal/app"
 	"github.com/sainakuo/scalable-notification-system/internal/config"
 	"github.com/sainakuo/scalable-notification-system/internal/handler"
+	"github.com/sainakuo/scalable-notification-system/internal/tracing"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // @title Scalable Notification System API
@@ -33,6 +35,26 @@ func main() {
 
 	cfg := config.LoadConfig()
 
+	tracerProvider, err := tracing.NewTracerProvider(
+		ctx,
+		"sns-api",
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancel()
+
+		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+			log.Println("tracer shutdown error:", err)
+		}
+	}()
+
 	apiApp, err := app.BuildAPI(ctx, cfg)
 	if err != nil {
 		log.Fatal(err)
@@ -40,7 +62,10 @@ func main() {
 	defer apiApp.Close()
 
 	router := gin.Default()
+
+	router.Use(otelgin.Middleware("sns-api"))
 	router.Use(handler.RequestIDMiddleware())
+
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	handler.RegisterRoutes(router, apiApp.TaskHandler, apiApp.HealthHandler)
